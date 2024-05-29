@@ -1,0 +1,15 @@
+{
+  "name": "discord_buybot",
+  "version": "1.0.0",
+  "description": "BuyBot for Solana based tokens. Add to your channel, provide a token CA to watch and the BuyBot will send a message whenever a purchase is made",
+  "main": "index.js",
+  "repository": "git@github.com:lorenzowijtman/discord_buybot.git",
+  "author": "Lorenzo <lorenzowijtman@hotmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@solana/web3.js": "^1.91.8",
+    "discord.js": "^14.15.2",
+    "dotenv": "^16.4.5",
+    "sqlite3": "^5.1.7"
+  }
+}
