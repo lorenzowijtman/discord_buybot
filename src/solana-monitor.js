@@ -1,8 +1,20 @@
-const { Connection, PublicKey, clusterApiUrl } = require('@solana/web3.js')
+require('dotenv').config()
+const { Connection, PublicKey } = require('@solana/web3.js')
+
 const sqlite3 = require('sqlite3').verbose()
 const client = require('./bot')
 
-const connection = new Connection(clusterApiUrl('mainnet-beta'))
+const alchemyKey = process.env.ALCHEMY_KEY
+var connection
+
+if (process.env.MODE === 'dev') {
+  connection = new Connection('https://api.mainnet-beta.solana.com')
+} else {
+  connection = new Connection(
+    `https://solana-mainnet.g.alchemy.com/v2/${alchemyKey}`
+  )
+}
+
 let db = new sqlite3.Database('./bot.db', (err) => {
   if (err) {
     console.error(err.message)
@@ -24,39 +36,50 @@ async function checkTransactions() {
       const signatures = await connection.getSignaturesForAddress(tokenPubKey)
 
       for (const signature of signatures) {
-        const transaction = await connection.getParsedTransaction(
-          signature.signature,
-          { maxSupportedTransactionVersion: 0 }
-        )
-        if (transaction) {
-          // console.log(transaction)
-
-          const { meta, transaction: tx } = transaction
-
-          // Check if it's a buy transaction (simplified example)
-          if (
-            meta &&
-            meta.postBalances &&
-            meta.postBalances[0] > meta.preBalances[0]
-          ) {
-            // Extract the transfer instruction
-            // const transferInstruction = tx.message.instructions.find(
-            //   (instruction) => instruction.parsed.type === 'transfer'
-            // )
-
-            // log the instructions
-            console.log('INSTRUCTIONS ', tx.message.instructions)
-
-            if (transferInstruction) {
-              // Extract the amount of tokens transferred
-              const tokenAmount = transferInstruction.parsed.info.amount
-
-              // Calculate the amount of SOL spent
-              const solSpent = meta.preBalances[0] - meta.postBalances[0]
-
-              const message = `Bought ${tokenAmount} ${tokenName} for ${solSpent} SOL. Transaction: https://explorer.solana.com/tx/${signature.signature}`
-              notifyDiscord(channelId, message)
+        if (signature.err != null) {
+          const transaction = await connection.getParsedTransaction(
+            signature.signature,
+            { maxSupportedTransactionVersion: 0 }
+          )
+          if (transaction) {
+            // console.log('TRANSACTION ', transaction)
+            console.log(
+              transaction.transaction?.message?.instructions,
+              transaction.transaction?.message?.instructions != null &&
+                transaction.transaction?.message?.instructions?.parsed?.type ==
+                  'transfer'
+            )
+            if (
+              transaction.transaction?.message?.instructions != null &&
+              transaction.transaction?.message?.instructions?.parsed?.type ==
+                'transfer'
+            ) {
+              console.log(
+                transaction.transaction?.message?.instructions?.parsed?.info
+              )
             }
+
+            // const { meta, transaction: tx } = transaction
+
+            // // Check if it's a buy transaction (simplified example)
+            // if (
+            //   meta &&
+            //   meta.postBalances &&
+            //   meta.postBalances[0] > meta.preBalances[0]
+            // ) {
+            //   console.log('INSTRUCTIONS ', tx)
+
+            //   if (transferInstruction) {
+            //     // Extract the amount of tokens transferred
+            //     const tokenAmount = transferInstruction.parsed.info.amount
+
+            //     // Calculate the amount of SOL spent
+            //     const solSpent = meta.preBalances[0] - meta.postBalances[0]
+
+            //     const message = `Bought ${tokenAmount} ${tokenName} for ${solSpent} SOL. Transaction: https://explorer.solana.com/tx/${signature.signature}`
+            //     notifyDiscord(channelId, message)
+            //   }
+            // }
           }
         }
       }
@@ -71,6 +94,6 @@ function notifyDiscord(channelId, message) {
   }
 }
 
-setInterval(checkTransactions, 5000) // Check every 5 sec
+setInterval(checkTransactions, process.env.RATE_LIMIT) // Check every 10 sec
 
 module.exports = checkTransactions
