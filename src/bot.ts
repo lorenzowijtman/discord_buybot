@@ -8,6 +8,7 @@ import {
 } from 'discord.js'
 import sqlite3 from 'sqlite3'
 import SolanaMonitor from './solana-monitor'
+import { ping } from './commands'
 
 export class Bot {
   private client: Client
@@ -15,6 +16,10 @@ export class Bot {
   private token: string
   private solanaMonitor: SolanaMonitor
   private commands: Collection<string, any>
+
+  private setCommands(): void {
+    this.commands.set(ping.data.name, ping)
+  }
 
   private initialize(): void {
     this.token = process.env.TOKEN as string
@@ -28,6 +33,7 @@ export class Bot {
     })
 
     this.commands = new Collection()
+    this.setCommands()
 
     this.client.on(Events.InteractionCreate, async (interaction) => {
       if (!interaction.isChatInputCommand()) return
