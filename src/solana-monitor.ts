@@ -15,30 +15,30 @@ export class SolanaMonitor {
     this.db = db
 
     this.checkTransactions = this.checkTransactions.bind(this)
-
-    console.log('db in constructor: ', db)
   }
 
   private initialize(): void {
     if (process.env.MODE === 'dev') {
       this.connection = new Connection('https://api.mainnet-beta.solana.com')
+      console.log('Connected to Solana mainnet network.')
     } else {
       this.connection = new Connection(
         `https://solana-mainnet.g.alchemy.com/v2/${this.alchemyKey}`
       )
+      console.log('Connected to Alchemy network.')
     }
   }
 
   private async checkTransactions(): Promise<void> {
-    console.log(this.db)
     this.db.each(
-      `SELECT serverId, channelId, tokenAddress FROM settings`,
+      `SELECT serverId, channelId, tokenAddress, lastSignature FROM settings`,
       async (err: Error | null, row: any) => {
+        console.log('row: ', row)
         if (err) {
           console.error(err.message)
           return
         }
-        const { serverId, channelId, tokenAddress } = row
+        const { serverId, channelId, tokenAddress, lastSignature } = row
         if (!tokenAddress) return
 
         const tokenPubKey = new PublicKey(tokenAddress)
@@ -46,12 +46,29 @@ export class SolanaMonitor {
           tokenPubKey
         )
 
-        for (const signature of signatures) {
+        // Only check the signatures that are newer than the last checked signature
+        const newSignatures = signatures.filter((signature) =>
+          lastSignature ? signature !== lastSignature : true
+        )
+
+        for (const signature of newSignatures) {
           if (signature.err == null) {
+            console.log('signature err nn ')
             const transaction = await this.connection.getParsedTransaction(
               signature.signature,
               { maxSupportedTransactionVersion: 0 }
             )
+
+            this.db.run(
+              `UPDATE settings SET lastSignature = ? WHERE serverId = ? AND tokenAddress = ?`,
+              [signature.signature, serverId, tokenAddress],
+              (updateErr) => {
+                if (updateErr) {
+                  console.error(updateErr.message)
+                }
+              }
+            )
+
             if (transaction) {
               const { meta, transaction: tx } = transaction
 
@@ -77,6 +94,7 @@ export class SolanaMonitor {
                   if (tokenAmount > 0 && solSpent > 0) {
                     const message = `Bought ${tokenAmount} tokens for ${solSpent} SOL. Transaction: https://explorer.solana.com/tx/${signature.signature}`
                     this.notifyDiscord(channelId, message)
+                    break
                   }
                 }
               }

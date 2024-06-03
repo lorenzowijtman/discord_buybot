@@ -8,7 +8,8 @@ import {
 } from 'discord.js'
 import sqlite3 from 'sqlite3'
 import SolanaMonitor from './solana-monitor'
-import { ping } from './commands'
+import { ping, track, stop } from './commands'
+import path from 'path'
 
 export class Bot {
   private client: Client
@@ -19,6 +20,8 @@ export class Bot {
 
   private setCommands(): void {
     this.commands.set(ping.data.name, ping)
+    this.commands.set(track.data.name, track)
+    this.commands.set(stop.data.name, stop)
   }
 
   private initialize(): void {
@@ -31,6 +34,17 @@ export class Bot {
         GatewayIntentBits.MessageContent,
       ],
     })
+
+    this.db = new sqlite3.Database(path.join(__dirname, '../bot.db'), (err) => {
+      if (err) {
+        console.error(err.message)
+      }
+      console.log('Connected to the bot database.')
+    })
+
+    this.db.run(
+      `CREATE TABLE IF NOT EXISTS settings (serverId TEXT, channelId TEXT, tokenAddress TEXT, lastSignature TEXT)`
+    )
 
     this.commands = new Collection()
     this.setCommands()
@@ -49,7 +63,7 @@ export class Bot {
       }
 
       try {
-        await command.execute(interaction)
+        await command.execute(interaction, this.db)
       } catch (error) {
         console.error(error)
         if (interaction.replied || interaction.deferred) {
@@ -66,61 +80,11 @@ export class Bot {
       }
     })
 
-    this.db = new sqlite3.Database('../bot.db', (err) => {
-      if (err) {
-        console.error(err.message)
-      }
-      console.log('Connected to the bot database.')
-    })
-
-    this.db.run(
-      `CREATE TABLE IF NOT EXISTS settings (serverId TEXT, channelId TEXT, tokenAddress TEXT)`
-    )
-
     this.solanaMonitor = new SolanaMonitor(this.client, this.db)
     this.solanaMonitor.run()
   }
 
   private handleMessages(message: Message): void {
-    if (message.content.startsWith('!setChannel')) {
-      if (message.guild) {
-        const serverId = message.guild.id
-        const channelId = message.channel.id
-        this.db.run(
-          `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, ?, (SELECT tokenAddress FROM settings WHERE serverId = ?))`,
-          [serverId, channelId, serverId],
-          function (err) {
-            if (err) {
-              return console.error(err.message)
-            }
-            message.channel.send(`Channel set to: ${channelId}`)
-          }
-        )
-      }
-    }
-
-    if (message.content.startsWith('!setToken')) {
-      const args = message.content.split(' ')
-      if (args.length === 2 && args[1].length === 44) {
-        const serverId = message.guild?.id
-        const tokenAddress = args[1]
-        this.db.run(
-          `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, (SELECT channelId FROM settings WHERE serverId = ?), ?)`,
-          [serverId, serverId, tokenAddress],
-          function (err) {
-            if (err) {
-              return console.error(err.message)
-            }
-            message.channel.send(`Token address set to: ${tokenAddress}`)
-          }
-        )
-      } else {
-        message.channel.send(
-          'Invalid token address. Please provide a valid Solana token address.'
-        )
-      }
-    }
-
     if (message.content.startsWith('!getAllRecords')) {
       this.db.each(`SELECT * FROM settings`, (err, row: any) => {
         if (err) {
@@ -153,6 +117,11 @@ export class Bot {
           message.channel.send(`Token address removed.`)
         }
       )
+    }
+
+    if (message.content.startsWith('!getGuildId')) {
+      const serverId = message.guild?.id
+      message.channel.send(`Server ID: ${serverId}`)
     }
   }
 
