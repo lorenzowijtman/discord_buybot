@@ -5,3 +5,7 @@ Solana network buybot for discord. Provide token CA to track and the buybot will
 # Start
 
 `npx ts-node index.ts`
+
+# Register commands
+
+`npx ts-node deploy-commands.ts`

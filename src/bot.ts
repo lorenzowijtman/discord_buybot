@@ -1,215 +1,166 @@
-// require('dotenv').config()
-// const { Client, GatewayIntentBits } = require('discord.js')
-// const sqlite3 = require('sqlite3').verbose()
-// const client = new Client({
-//   intents: [
-//     GatewayIntentBits.Guilds,
-//     GatewayIntentBits.GuildMessages,
-//     GatewayIntentBits.MessageContent,
-//   ],
-// })
-
-// const token = process.env.TOKEN
-
-// let db = new sqlite3.Database('./bot.db', (err) => {
-//   if (err) {
-//     console.error(err.message)
-//   }
-//   console.log('Connected to the bot database.')
-// })
-
-// db.run(
-//   `CREATE TABLE IF NOT EXISTS settings (serverId TEXT, channelId TEXT, tokenAddress TEXT)`
-// )
-
-// client.once('ready', () => {
-//   console.log('Discord bot is ready!')
-// })
-
-// client.on('messageCreate', (message) => {
-//   if (message.content.startsWith('!setChannel')) {
-//     if (message.guild) {
-//       const serverId = message.guild.id
-//       const channelId = message.channel.id
-//       db.run(
-//         `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, ?, (SELECT tokenAddress FROM settings WHERE serverId = ?))`,
-//         [serverId, channelId, serverId],
-//         function (err) {
-//           if (err) {
-//             return console.error(err.message)
-//           }
-//           message.channel.send(`Channel set to: ${channelId}`)
-//         }
-//       )
-//     }
-//   }
-
-//   if (message.content.startsWith('!setToken')) {
-//     const args = message.content.split(' ')
-//     if (args.length === 2 && args[1].length === 44) {
-//       const serverId = message.guild.id
-//       const tokenAddress = args[1]
-//       db.run(
-//         `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, (SELECT channelId FROM settings WHERE serverId = ?), ?)`,
-//         [serverId, serverId, tokenAddress],
-//         function (err) {
-//           if (err) {
-//             return console.error(err.message)
-//           }
-//           message.channel.send(`Token address set to: ${tokenAddress}`)
-//         }
-//       )
-//     } else {
-//       message.channel.send(
-//         'Invalid token address. Please provide a valid Solana token address.'
-//       )
-//     }
-//   }
-
-//   if (message.content.startsWith('!getAllRecords')) {
-//     db.each(`SELECT * FROM settings`, (err, row) => {
-//       if (err) {
-//         return console.error(err.message)
-//       }
-//       message.channel.send(
-//         `Server ID: ${row.serverId}, Channel ID: ${row.channelId}, Token Address: ${row.tokenAddress}`
-//       )
-//     })
-//   }
-
-//   if (message.content.startsWith('!deleteAllRecords')) {
-//     db.run(`DELETE FROM settings`, function (err) {
-//       if (err) {
-//         return console.error(err.message)
-//       }
-//       message.channel.send('All records deleted.')
-//     })
-//   }
-
-//   if (message.content.startsWith('!removeToken')) {
-//     const serverId = message.guild.id
-//     db.run(
-//       `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, (SELECT channelId FROM settings WHERE serverId = ?), NULL)`,
-//       [serverId, serverId],
-//       function (err) {
-//         if (err) {
-//           return console.error(err.message)
-//         }
-//         message.channel.send(`Token address removed.`)
-//       }
-//     )
-//   }
-// })
-
-// client.login(token)
-
-// module.exports = client
-
 import { config } from 'dotenv'
-import { Client, GatewayIntentBits, Message } from 'discord.js'
+import {
+  Client,
+  Collection,
+  Events,
+  GatewayIntentBits,
+  Message,
+} from 'discord.js'
 import sqlite3 from 'sqlite3'
+import SolanaMonitor from './solana-monitor'
 
-config()
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-})
+export class Bot {
+  private client: Client
+  private db: sqlite3.Database
+  private token: string
+  private solanaMonitor: SolanaMonitor
+  private commands: Collection<string, any>
 
-const token: string = process.env.TOKEN as string
+  private initialize(): void {
+    this.token = process.env.TOKEN as string
 
-let db = new sqlite3.Database('./bot.db', (err: Error | null) => {
-  if (err) {
-    console.error(err.message)
-  }
-  console.log('Connected to the bot database.')
-})
-
-db.run(
-  `CREATE TABLE IF NOT EXISTS settings (serverId TEXT, channelId TEXT, tokenAddress TEXT)`
-)
-
-client.once('ready', () => {
-  console.log('Discord bot is ready!')
-})
-
-client.on('messageCreate', (message: Message) => {
-  if (message.content.startsWith('!setChannel')) {
-    if (message.guild) {
-      const serverId = message.guild.id
-      const channelId = message.channel.id
-      db.run(
-        `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, ?, (SELECT tokenAddress FROM settings WHERE serverId = ?))`,
-        [serverId, channelId, serverId],
-        function (err) {
-          if (err) {
-            return console.error(err.message)
-          }
-          message.channel.send(`Channel set to: ${channelId}`)
-        }
-      )
-    }
-  }
-
-  if (message.content.startsWith('!setToken')) {
-    const args = message.content.split(' ')
-    if (args.length === 2 && args[1].length === 44) {
-      const serverId = message.guild?.id
-      const tokenAddress = args[1]
-      db.run(
-        `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, (SELECT channelId FROM settings WHERE serverId = ?), ?)`,
-        [serverId, serverId, tokenAddress],
-        function (err) {
-          if (err) {
-            return console.error(err.message)
-          }
-          message.channel.send(`Token address set to: ${tokenAddress}`)
-        }
-      )
-    } else {
-      message.channel.send(
-        'Invalid token address. Please provide a valid Solana token address.'
-      )
-    }
-  }
-
-  if (message.content.startsWith('!getAllRecords')) {
-    db.each(`SELECT * FROM settings`, (err, row: any) => {
-      if (err) {
-        return console.error(err.message)
-      }
-      message.channel.send(
-        `Server ID: ${row.serverId}, Channel ID: ${row.channelId}, Token Address: ${row.tokenAddress}`
-      )
+    this.client = new Client({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+      ],
     })
-  }
 
-  if (message.content.startsWith('!deleteAllRecords')) {
-    db.run(`DELETE FROM settings`, function (err) {
-      if (err) {
-        return console.error(err.message)
+    this.commands = new Collection()
+
+    this.client.on(Events.InteractionCreate, async (interaction) => {
+      if (!interaction.isChatInputCommand()) return
+      console.log(interaction)
+
+      const command = this.commands.get(interaction.commandName)
+
+      if (!command) {
+        console.error(
+          `No command matching ${interaction.commandName} was found.`
+        )
+        return
       }
-      message.channel.send('All records deleted.')
+
+      try {
+        await command.execute(interaction)
+      } catch (error) {
+        console.error(error)
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({
+            content: 'There was an error while executing this command!',
+            ephemeral: true,
+          })
+        } else {
+          await interaction.reply({
+            content: 'There was an error while executing this command!',
+            ephemeral: true,
+          })
+        }
+      }
     })
+
+    this.db = new sqlite3.Database('../bot.db', (err) => {
+      if (err) {
+        console.error(err.message)
+      }
+      console.log('Connected to the bot database.')
+    })
+
+    this.db.run(
+      `CREATE TABLE IF NOT EXISTS settings (serverId TEXT, channelId TEXT, tokenAddress TEXT)`
+    )
+
+    this.solanaMonitor = new SolanaMonitor(this.client, this.db)
+    this.solanaMonitor.run()
   }
 
-  if (message.content.startsWith('!removeToken')) {
-    const serverId = message.guild?.id
-    db.run(
-      `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, (SELECT channelId FROM settings WHERE serverId = ?), NULL)`,
-      [serverId, serverId],
-      function (err) {
+  private handleMessages(message: Message): void {
+    if (message.content.startsWith('!setChannel')) {
+      if (message.guild) {
+        const serverId = message.guild.id
+        const channelId = message.channel.id
+        this.db.run(
+          `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, ?, (SELECT tokenAddress FROM settings WHERE serverId = ?))`,
+          [serverId, channelId, serverId],
+          function (err) {
+            if (err) {
+              return console.error(err.message)
+            }
+            message.channel.send(`Channel set to: ${channelId}`)
+          }
+        )
+      }
+    }
+
+    if (message.content.startsWith('!setToken')) {
+      const args = message.content.split(' ')
+      if (args.length === 2 && args[1].length === 44) {
+        const serverId = message.guild?.id
+        const tokenAddress = args[1]
+        this.db.run(
+          `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, (SELECT channelId FROM settings WHERE serverId = ?), ?)`,
+          [serverId, serverId, tokenAddress],
+          function (err) {
+            if (err) {
+              return console.error(err.message)
+            }
+            message.channel.send(`Token address set to: ${tokenAddress}`)
+          }
+        )
+      } else {
+        message.channel.send(
+          'Invalid token address. Please provide a valid Solana token address.'
+        )
+      }
+    }
+
+    if (message.content.startsWith('!getAllRecords')) {
+      this.db.each(`SELECT * FROM settings`, (err, row: any) => {
         if (err) {
           return console.error(err.message)
         }
-        message.channel.send(`Token address removed.`)
-      }
-    )
+        message.channel.send(
+          `Server ID: ${row.serverId}, Channel ID: ${row.channelId}, Token Address: ${row.tokenAddress}`
+        )
+      })
+    }
+
+    if (message.content.startsWith('!deleteAllRecords')) {
+      this.db.run(`DELETE FROM settings`, function (err) {
+        if (err) {
+          return console.error(err.message)
+        }
+        message.channel.send('All records deleted.')
+      })
+    }
+
+    if (message.content.startsWith('!removeToken')) {
+      const serverId = message.guild?.id
+      this.db.run(
+        `INSERT OR REPLACE INTO settings (serverId, channelId, tokenAddress) VALUES (?, (SELECT channelId FROM settings WHERE serverId = ?), NULL)`,
+        [serverId, serverId],
+        function (err) {
+          if (err) {
+            return console.error(err.message)
+          }
+          message.channel.send(`Token address removed.`)
+        }
+      )
+    }
   }
-})
 
-client.login(token)
+  run(): void {
+    this.initialize()
 
-export default client
+    this.client.once('ready', () => {
+      console.log('Discord bot is ready!')
+    })
+
+    this.client.on('messageCreate', this.handleMessages)
+
+    this.client.login(this.token)
+  }
+}
+
+export default Bot
