@@ -53,7 +53,6 @@ export class SolanaMonitor {
 
         for (const signature of newSignatures) {
           if (signature.err == null) {
-            console.log('signature err nn ')
             const transaction = await this.connection.getParsedTransaction(
               signature.signature,
               { maxSupportedTransactionVersion: 0 }
@@ -69,6 +68,8 @@ export class SolanaMonitor {
               }
             )
 
+            console.log(transaction)
+
             if (transaction) {
               const { meta, transaction: tx } = transaction
 
@@ -79,6 +80,8 @@ export class SolanaMonitor {
                 const postTokenBalance = meta.postTokenBalances?.find(
                   (balance) => balance.mint === tokenAddress
                 )
+
+                console.log(preTokenBalance, postTokenBalance)
 
                 if (
                   preTokenBalance?.uiTokenAmount.uiAmount &&
